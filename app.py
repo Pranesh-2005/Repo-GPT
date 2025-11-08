@@ -62,3 +62,23 @@ def analyze_repo(url: str):
     finally:
         if repo_dir and Path(repo_dir).exists():
             shutil.rmtree(repo_dir, ignore_errors=True)
+
+
+# ---------------- OPENROUTER CLIENT ----------------
+def openrouter_chat(system_prompt, user_prompt, context=""):
+    messages = [{"role": "system", "content": system_prompt}]
+    if context:
+        messages.append({"role": "system", "content": f"Repository context:\n{context}"})
+    messages.append({"role": "user", "content": user_prompt})
+
+    payload = {"model": OPENROUTER_MODEL, "messages": messages}
+    try:
+        r = requests.post(OPENROUTER_URL, headers=HEADERS, json=payload, timeout=120)
+        r.raise_for_status()
+        obj = r.json()
+        if "choices" in obj and obj["choices"]:
+            msg = obj["choices"][0]["message"]["content"]
+            return msg.strip()
+        return "[OpenRouter] Unexpected response format."
+    except Exception as e:
+        return f"[OpenRouter error] {e}"
