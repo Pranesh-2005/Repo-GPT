@@ -82,3 +82,22 @@ def openrouter_chat(system_prompt, user_prompt, context=""):
         return "[OpenRouter] Unexpected response format."
     except Exception as e:
         return f"[OpenRouter error] {e}"
+    
+# ---------------- CHAT LOGIC ----------------
+SYSTEM_PROMPT = (
+    "You are an expert developer assistant. You help users explore and understand "
+    "a GitHub repository. Base every response strictly on the repo's content and structure. "
+    "If unsure, say so. Explain clearly and concisely. Avoid hallucinating."
+)
+
+def chat_repo(user_msg, chat_history, repo_text):
+    if not repo_text:
+        chat_history.append({"role": "assistant", "content": "❌ Please analyze a repository first."})
+        return chat_history, ""
+    
+    context = repo_text[:120000]  # truncate for token safety
+    response = openrouter_chat(SYSTEM_PROMPT, user_msg, context)
+    chat_history.append({"role": "user", "content": user_msg})
+    chat_history.append({"role": "assistant", "content": response})
+    return chat_history, ""
+
