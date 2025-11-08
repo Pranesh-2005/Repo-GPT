@@ -23,3 +23,42 @@ SKIP_DIRS = {
     "__pycache__", ".next", ".cache", "target", "bin", "obj", ".idea", ".vscode"
 }
 MAX_FILE_BYTES = 800_000
+
+# ---------------- REPO UTILITIES ----------------
+def clone_repo(url: str) -> Path:
+    d = Path(tempfile.mkdtemp(prefix=".tmp_repo_")).resolve()
+    Repo.clone_from(url, d, depth=1)
+    return d
+
+def read_repo_text(repo_dir: Path) -> str:
+    buf = []
+    for root, dirs, files in os.walk(repo_dir):
+        dirs[:] = [x for x in dirs if x not in SKIP_DIRS]
+        for f in files:
+            p = Path(root) / f
+            if p.suffix.lower() in ALLOWED_EXT and p.stat().st_size <= MAX_FILE_BYTES:
+                try:
+                    txt = p.read_text(encoding="utf-8", errors="ignore")
+                    if txt.strip():
+                        rel = str(p.relative_to(repo_dir))
+                        buf.append(f"\n=== FILE: {rel} ===\n{txt}")
+                except Exception:
+                    pass
+    return "\n".join(buf)
+
+def analyze_repo(url: str):
+    if not url or not re.match(r"^https?://", url.strip()):
+        return None, "❌ Invalid URL"
+    repo_dir = None
+    try:
+        repo_dir = clone_repo(url.strip())
+        text = read_repo_text(repo_dir)
+        if not text.strip():
+            return None, "⚠️ No readable text files found"
+        kb_size = len(text) // 1000
+        return text, f"✅ Repo loaded successfully ({kb_size} KB of text)"
+    except Exception as e:
+        return None, f"❌ Error: {e}"
+    finally:
+        if repo_dir and Path(repo_dir).exists():
+            shutil.rmtree(repo_dir, ignore_errors=True)
