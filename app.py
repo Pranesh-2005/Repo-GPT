@@ -101,3 +101,45 @@ def chat_repo(user_msg, chat_history, repo_text):
     chat_history.append({"role": "assistant", "content": response})
     return chat_history, ""
 
+# ---------------- GRADIO UI ----------------
+with gr.Blocks(title="Repo Chatbot · OpenRouter") as demo:
+    gr.Markdown(
+        """
+        # 🤖 Repo Chatbot — powered by OpenRouter  
+        Chat with your GitHub repository!  
+        Upload a repo URL and ask anything about its **code, structure, or design**.  
+        _(No embeddings, just pure context reasoning.)_
+        """
+    )
+
+    repo_state = gr.State()
+    chat_history = gr.State([])
+
+    with gr.Row():
+        repo_url = gr.Textbox(
+            label="GitHub repo URL",
+            placeholder="https://github.com/owner/repo",
+            scale=4
+        )
+        analyze_btn = gr.Button("🔍 Analyze Repo", scale=1)
+
+    status_box = gr.Markdown()
+
+    # ✅ Add type='messages' to match new format
+    chatbot = gr.Chatbot(label="Repo Chatbot", height=500, type="messages")
+    user_box = gr.Textbox(label="Ask something about the repo...")
+
+    clear_btn = gr.Button("🧹 Clear Chat")
+
+    # ---- CALLBACKS ----
+    def analyze_repo_cb(url):
+        text, status = analyze_repo(url)
+        return text, status
+
+    analyze_btn.click(analyze_repo_cb, inputs=[repo_url], outputs=[repo_state, status_box])
+    user_box.submit(chat_repo, inputs=[user_box, chat_history, repo_state],
+                    outputs=[chatbot, user_box])
+    clear_btn.click(lambda: ([], ""), None, [chatbot, user_box])
+
+    demo.queue()  # ✅ removed unsupported arg
+    demo.launch(server_name="0.0.0.0", server_port=7860)
