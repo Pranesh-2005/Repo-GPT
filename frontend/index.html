@@ -1,0 +1,1002 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>RepoGPT — Nice Chat UI</title>
+
+  <!-- @gradio/client (ES module) -->
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js"></script>
+  
+  <!-- Marked.js for markdown rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  
+  <!-- Prism.js for syntax highlighting -->
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap');
+    
+    :root{
+      --bg-gradient: linear-gradient(135deg,#5b2e7e 0%, #2fb8b8 100%); /* purple → teal */
+      --panel: rgba(255,255,255,0.06);
+      --glass: rgba(255,255,255,0.04);
+      --muted: rgba(255,255,255,0.75);
+      --accent: #ffd166;
+      --success: #7ee787;
+      --danger: #ff6b6b;
+      --radius: 12px;
+      --chat-bg: linear-gradient(145deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+      --chat-text: #f8fafc;
+      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: var(--bg-gradient);
+      color: #fff;
+      overflow-x: hidden;
+    }
+
+    .wrap {
+      width: 100%;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+
+    /* Desktop layout */
+    @media (min-width: 1024px) {
+      .wrap {
+        grid-template-columns: 320px 1fr;
+        padding: 28px 24px;
+      }
+    }
+
+    /* Tablet layout */
+    @media (min-width: 768px) and (max-width: 1023px) {
+      .wrap {
+        padding: 24px 20px;
+        gap: 16px;
+      }
+    }
+
+    /* Mobile layout */
+    @media (max-width: 767px) {
+      .wrap {
+        padding: 16px 12px;
+        gap: 16px;
+      }
+    }
+
+    /* Left panel */
+    .left {
+      padding: 18px;
+      background: var(--panel);
+      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    @media (max-width: 1023px) {
+      .left {
+        order: 2;
+        padding: 16px;
+      }
+    }
+
+    .brand {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .logo {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      background: linear-gradient(135deg,#ffd166,#ff8fab);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #2b0b3a;
+      font-weight: 700;
+      font-size: 18px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+      flex-shrink: 0;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+
+    @media (max-width: 480px) {
+      h1 {
+        font-size: 16px;
+      }
+    }
+
+    p.lead {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 400;
+      line-height: 1.3;
+    }
+
+    @media (max-width: 480px) {
+      p.lead {
+        font-size: 12px;
+      }
+    }
+
+    label {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 8px;
+      font-weight: 500;
+      display: block;
+    }
+
+    input[type="text"], textarea {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: transparent;
+      color: #fff;
+      outline: none;
+      font-size: 14px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+      transition: border-color 0.2s ease;
+      box-sizing: border-box;
+    }
+
+    @media (max-width: 480px) {
+      input[type="text"], textarea {
+        padding: 10px 12px;
+        font-size: 16px; /* Prevents zoom on iOS */
+      }
+    }
+
+    input[type="text"]:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.2);
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 12px 16px;
+      border-radius: 10px;
+      border: none;
+      background: linear-gradient(90deg,#8e54e9,#2fb8b8);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(43,20,80,0.3);
+      transition: transform 0.2s ease;
+      font-size: 14px;
+      min-width: 80px;
+      text-align: center;
+      flex: 1;
+    }
+
+    @media (max-width: 480px) {
+      .btn {
+        padding: 14px 18px;
+        font-size: 15px;
+        min-height: 48px; /* Better touch targets */
+      }
+    }
+
+    .btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn.ghost {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .status {
+      font-size: 13px;
+      color: var(--muted);
+      padding: 10px 12px;
+      background: var(--glass);
+      border-radius: 8px;
+      font-weight: 500;
+      word-break: break-word;
+    }
+
+    .small {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 400;
+      line-height: 1.4;
+    }
+
+    /* Right (chat) - Enhanced styling */
+    .chat {
+      padding: 20px;
+      background: var(--chat-bg);
+      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+      border: 1px solid rgba(255,255,255,0.08);
+      backdrop-filter: blur(10px);
+      width: 100%;
+      min-height: 500px;
+      height: fit-content;
+    }
+
+    @media (max-width: 1023px) {
+      .chat {
+        order: 1;
+        min-height: 60vh;
+        padding: 16px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .chat {
+        padding: 14px;
+        min-height: 50vh;
+      }
+    }
+
+    .chat-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chat-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--chat-text);
+    }
+
+    @media (max-width: 480px) {
+      .chat-title {
+        font-size: 15px;
+      }
+    }
+
+    .chat-window {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.2) transparent;
+      background: rgba(255,255,255,0.01);
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.05);
+      min-height: 300px;
+      max-height: 400px;
+    }
+
+    @media (max-width: 1023px) {
+      .chat-window {
+        max-height: 50vh;
+        min-height: 250px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .chat-window {
+        padding: 12px 8px;
+        max-height: 40vh;
+        min-height: 200px;
+      }
+    }
+
+    .chat-window::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .chat-window::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .chat-window::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,0.2);
+      border-radius: 3px;
+    }
+
+    .bubble {
+      max-width: 85%;
+      padding: 14px 16px;
+      border-radius: 16px;
+      line-height: 1.5;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+      animation: slideIn 0.3s ease-out;
+      font-size: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      position: relative;
+    }
+
+    @media (max-width: 480px) {
+      .bubble {
+        max-width: 95%;
+        padding: 12px 14px;
+        font-size: 14px;
+      }
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .user {
+      align-self: flex-end;
+      background: linear-gradient(145deg,#4c1d95,#7c3aed);
+      border-bottom-right-radius: 6px;
+      color: #fff;
+    }
+
+    .bot {
+      align-self: flex-start;
+      background: linear-gradient(145deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04));
+      color: var(--chat-text);
+      border-bottom-left-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .meta {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 8px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 10px;
+      padding-top: 12px;
+      margin-top: 8px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      align-items: stretch;
+    }
+
+    @media (max-width: 480px) {
+      .input-row {
+        gap: 8px;
+      }
+    }
+
+    .chat-input {
+      flex: 1;
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.02);
+      color: var(--chat-text);
+      transition: all 0.2s ease;
+      font-size: 14px;
+      font-weight: 400;
+      box-sizing: border-box;
+      resize: none;
+      min-height: 48px;
+    }
+
+    @media (max-width: 480px) {
+      .chat-input {
+        font-size: 16px; /* Prevents zoom on iOS */
+        padding: 12px 14px;
+      }
+    }
+
+    .chat-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.2);
+      background: rgba(255,255,255,0.04);
+    }
+
+    .chat-input.typing {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.3);
+      background: rgba(255, 209, 102, 0.08);
+    }
+
+    .send {
+      width: 72px;
+      border-radius: 12px;
+      background: var(--accent);
+      color: #2b0b3a;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    @media (max-width: 480px) {
+      .send {
+        width: 64px;
+        font-size: 12px;
+      }
+    }
+
+    .send:hover:not(:disabled) {
+      background: #ffdb4d;
+      transform: translateY(-1px);
+    }
+
+    .send:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* Copy button for bot messages */
+    .copy-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 6px 8px;
+      font-size: 11px;
+      opacity: 0;
+      transition: all 0.2s ease;
+      font-weight: 500;
+    }
+
+    @media (max-width: 768px) {
+      .copy-btn {
+        opacity: 1; /* Always show on mobile */
+        font-size: 10px;
+        padding: 4px 6px;
+      }
+    }
+
+    .bubble.bot:hover .copy-btn {
+      opacity: 1;
+    }
+
+    .copy-btn:hover {
+      background: rgba(255,255,255,0.2);
+      color: #fff;
+    }
+
+    .copy-btn.copied {
+      background: var(--success);
+      color: #000;
+    }
+
+    /* Markdown content styling */
+    .markdown-content {
+      font-family: 'Inter', sans-serif;
+      line-height: 1.5;
+      color: var(--chat-text);
+      font-size: 14px;
+    }
+
+    .markdown-content p {
+      margin: 4px 0 6px 0;
+    }
+
+    .markdown-content h1, 
+    .markdown-content h2, 
+    .markdown-content h3 {
+      color: #fff;
+      margin: 10px 0 6px 0;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    @media (max-width: 480px) {
+      .markdown-content h1 { font-size: 18px; }
+      .markdown-content h2 { font-size: 16px; }
+      .markdown-content h3 { font-size: 15px; }
+    }
+
+    .markdown-content ul,
+    .markdown-content ol {
+      margin: 4px 0 6px 16px;
+      padding: 0;
+    }
+
+    .markdown-content li {
+      margin: 2px 0;
+      color: var(--chat-text);
+    }
+
+    .markdown-content pre {
+      background: rgba(0, 0, 0, 0.4);
+      padding: 10px 12px;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 6px 0;
+      border: 1px solid rgba(255,255,255,0.1);
+      font-size: 13px;
+    }
+
+    @media (max-width: 480px) {
+      .markdown-content pre {
+        padding: 8px 10px;
+        font-size: 12px;
+      }
+    }
+
+    .markdown-content code {
+      background: rgba(0,0,0,0.3);
+      padding: 2px 4px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+
+    .markdown-content blockquote {
+      border-left: 3px solid var(--accent);
+      padding-left: 12px;
+      margin: 12px 0;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .markdown-content hr {
+      border: none;
+      height: 1px;
+      background: rgba(255,255,255,0.2);
+      margin: 8px 0;
+    }
+
+    /* Typing indicator */
+    .typing-indicator {
+      align-self: flex-start;
+      max-width: 78%;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border-bottom-left-radius: 6px;
+      background: linear-gradient(145deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04));
+      animation: slideIn 0.3s ease-out;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .typing-dots {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .typing-dots span {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: typingDot 1.4s infinite ease-in-out;
+    }
+
+    .typing-dots span:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .typing-dots span:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    @keyframes typingDot {
+      0%, 80%, 100% {
+        opacity: 0.3;
+        transform: scale(0.8);
+      }
+      40% {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    footer {
+      text-align: center;
+      color: rgba(255,255,255,0.6);
+      font-size: 13px;
+      padding-top: 14px;
+      font-weight: 400;
+      margin-top: auto;
+    }
+
+    @media (max-width: 480px) {
+      footer {
+        font-size: 12px;
+        padding-top: 12px;
+      }
+    }
+
+    /* Utility classes for better mobile experience */
+    @media (max-width: 767px) {
+      .mobile-hide {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap" role="main">
+    <div class="left">
+      <div class="brand">
+        <div class="logo">RG</div>
+        <div>
+          <h1>RepoGPT — Chat UI</h1>
+          <p class="lead">Ask questions about any GitHub repo. Nice theme, fast UX.</p>
+        </div>
+      </div>
+
+      <label for="repoUrl">GitHub repo URL</label>
+      <input id="repoUrl" type="text" placeholder="https://github.com/owner/repo" />
+
+      <div class="row" style="margin-top:8px">
+        <button id="connectBtn" class="btn">Connect</button>
+        <button id="analyzeBtn" class="btn ghost" disabled>Analyze</button>
+      </div>
+
+      <div style="margin-top:12px">
+        <div class="status" id="status">Not connected</div>
+      </div>
+
+      <div style="margin-top:12px">
+        <div class="small">Quick tips</div>
+        <ul class="small" style="margin:6px 0 0 18px">
+          <li>Paste repo URL and click <b>Analyze</b>.</li>
+          <li>Ask the bot about project structure, dependencies, functions.</li>
+          <li>Wait for typing animation to complete.</li>
+        </ul>
+      </div>
+
+      <footer>Made with 💜 &nbsp;•&nbsp; Using @gradio/client</footer>
+    </div>
+
+    <div class="chat">
+      <div class="chat-header">
+        <div>
+          <div class="chat-title">Repo Chat</div>
+          <div class="small" id="repoMeta">No repo analyzed yet</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button id="clearChat" class="btn ghost">Clear</button>
+        </div>
+      </div>
+
+      <div id="chatWindow" class="chat-window" aria-live="polite"></div>
+
+      <div class="input-row">
+        <input id="userInput" class="chat-input" placeholder="Ask something about the repo... (press Enter to send)" />
+        <button id="sendBtn" class="send">Send</button>
+      </div>
+    </div>
+  </div>
+
+<script type="module">
+  // ...existing code...
+  import { Client } from "https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js";
+
+  // UI elements
+  const connectBtn = document.getElementById("connectBtn");
+  const analyzeBtn = document.getElementById("analyzeBtn");
+  const status = document.getElementById("status");
+  const repoUrlInput = document.getElementById("repoUrl");
+  const sendBtn = document.getElementById("sendBtn");
+  const userInput = document.getElementById("userInput");
+  const chatWindow = document.getElementById("chatWindow");
+  const repoMeta = document.getElementById("repoMeta");
+  const clearChatBtn = document.getElementById("clearChat");
+
+  let client = null;
+  let connected = false;
+  let lastChatState = []; // will store array of {role, content} messages
+  let repoLoaded = false;
+  let isTyping = false;
+
+  // Configure marked options
+  if (typeof marked !== 'undefined') {
+    marked.setOptions({
+      highlight: function(code, lang) {
+        if (typeof Prism !== 'undefined' && Prism.languages[lang]) {
+          return Prism.highlight(code, Prism.languages[lang], lang);
+        }
+        return code;
+      },
+      breaks: true,
+      gfm: true
+    });
+  }
+  
+  function renderMarkdown(text) {
+    if (typeof marked !== 'undefined') {
+      // Clean up excessive newlines and whitespace properly
+      const cleanText = text
+        .replace(/\n{2,}/g, '\n')           // Replace 3+ consecutive newlines with just 2
+        .replace(/^\s+/gm, '')                // Remove leading whitespace from each line
+        .replace(/\s+$/gm, '')                // Remove trailing whitespace from each line
+        .replace(/\n\s*\n\s*\n/g, '\n\n')     // Clean up any remaining triple newlines
+        .trim();                              // Trim start and end
+      
+      return marked.parse(cleanText);
+    }
+    // fallback (no marked)
+    return text.replace(/\n/g, '<br>');
+  }
+
+  function copyToClipboard(text, button) {
+    // Clean up the text by removing extra whitespace and formatting
+    const cleanText = text.replace(/\s+/g, ' ').trim();
+    
+    navigator.clipboard.writeText(cleanText).then(() => {
+      button.textContent = 'Copied!';
+      button.classList.add('copied');
+      setTimeout(() => {
+        button.textContent = 'Copy';
+        button.classList.remove('copied');
+      }, 2000);
+    }).catch(err => {
+      console.error('Failed to copy: ', err);
+      button.textContent = 'Error';
+      setTimeout(() => {
+        button.textContent = 'Copy';
+      }, 2000);
+    });
+  }
+
+  function appendBubble(role, text) {
+    const el = document.createElement("div");
+    el.className = 'bubble ' + (role === 'user' ? 'user' : 'bot');
+    
+    const meta = document.createElement('div'); 
+    meta.className='meta';
+    meta.textContent = role === 'user' ? 'You' : 'RepoGPT';
+    
+    const content = document.createElement('div');
+    if (role === 'bot') {
+      content.className = 'markdown-content';
+      content.innerHTML = renderMarkdown(text);
+      
+      // Add copy button for bot messages
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'copy-btn';
+      copyBtn.textContent = 'Copy';
+      copyBtn.onclick = () => copyToClipboard(text, copyBtn);
+      el.appendChild(copyBtn);
+    } else {
+      content.textContent = text;
+    }
+    
+    el.appendChild(meta); 
+    el.appendChild(content);
+    chatWindow.appendChild(el);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+    
+    // Highlight code blocks after rendering
+    if (role === 'bot' && typeof Prism !== 'undefined') {
+      Prism.highlightAllUnder(el);
+    }
+  }
+
+  function showTypingIndicator() {
+    if (isTyping) return;
+    isTyping = true;
+    const el = document.createElement("div");
+    el.className = 'typing-indicator';
+    el.id = 'typingIndicator';
+    const meta = document.createElement('div'); meta.className='meta';
+    meta.textContent = 'RepoGPT';
+    const dots = document.createElement('div'); dots.className='typing-dots';
+    dots.innerHTML = '<span></span><span></span><span></span>';
+    el.appendChild(meta); el.appendChild(dots);
+    chatWindow.appendChild(el);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+  }
+
+  function hideTypingIndicator() {
+    const indicator = document.getElementById('typingIndicator');
+    if (indicator) {
+      indicator.remove();
+    }
+    isTyping = false;
+  }
+
+  function showStatus(msg, ok=true) {
+    status.textContent = msg;
+    status.style.color = ok ? 'var(--success)' : 'var(--danger)';
+  }
+
+  // Add typing highlight effect
+  userInput.addEventListener('input', () => {
+    if (userInput.value.trim()) {
+      userInput.classList.add('typing');
+    } else {
+      userInput.classList.remove('typing');
+    }
+  });
+
+  userInput.addEventListener('blur', () => {
+    userInput.classList.remove('typing');
+  });
+
+  // Connect to the space via @gradio/client
+  connectBtn.addEventListener('click', async () => {
+    const space = "PraneshJs/RepoGPT"; // hardcoded space
+    const hfToken = undefined; // no token input in UI
+    showStatus('Connecting…', true);
+    connectBtn.disabled = true;
+
+    try {
+      // pass hf_token if space private
+      client = await Client.connect(space);
+
+      connected = true;
+      showStatus('Connected to ' + space, true);
+      analyzeBtn.disabled = false;
+    } catch (err) {
+      console.error(err);
+      showStatus('Connection failed: ' + (err.message || err), false);
+      analyzeBtn.disabled = true;
+      connected = false;
+    } finally {
+      connectBtn.disabled = false;
+    }
+  });
+
+  // Analyze repo (calls analyze_repo_cb)
+  analyzeBtn.addEventListener('click', async () => {
+    if (!connected || !client) {
+      showStatus('Not connected. Click Connect first.', false);
+      return;
+    }
+    const url = repoUrlInput.value.trim();
+    if (!url) {
+      showStatus('Please enter a GitHub repo URL.', false);
+      return;
+    }
+    analyzeBtn.disabled = true;
+    showStatus('Analyzing repo… this may take a few seconds', true);
+    repoMeta.textContent = 'Loading...';
+    showTypingIndicator();
+    
+    try {
+      // predict returns {data: [...]}
+      const res = await client.predict("/analyze_repo_cb", { url });
+      const [repoText, statusText] = res.data || [];
+      // statusText is the second return, but API mapping sometimes returns differently.
+      // The endpoint in your Gradio returns [repo_state, status], where repo_state is the repo text.
+      if (res.data && res.data.length >= 2) {
+        // update UI
+        repoLoaded = !!res.data[0];
+        repoMeta.textContent = repoLoaded ? (statusText || 'Repo loaded') : 'No repo loaded';
+        showStatus(statusText || 'Ready', repoLoaded);
+        // clear chat when you load a new repo
+        lastChatState = [];
+        chatWindow.innerHTML = '';
+        appendBubble('bot', statusText || 'Repo loaded. Ask me anything about it.');
+      } else {
+        // fallback if single string
+        showStatus(res.data || 'Analyzed', true);
+        appendBubble('bot', String(res.data));
+      }
+    } catch (err) {
+      console.error(err);
+      showStatus('Analyze failed: ' + (err.message||err), false);
+      appendBubble('bot','Analysis failed. See console for details.');
+    } finally {
+      hideTypingIndicator();
+      analyzeBtn.disabled = false;
+    }
+  });
+
+  // Chat send
+  async function sendMessage() {
+    if (!connected || !client) {
+      showStatus('Not connected. Click Connect first.', false);
+      return;
+    }
+    const txt = userInput.value.trim();
+    if (!txt) return;
+    
+    appendBubble('user', txt);
+    userInput.value = '';
+    userInput.classList.remove('typing');
+    sendBtn.disabled = true;
+    showStatus('Asking the model…', true);
+    showTypingIndicator();
+
+    try {
+      // call /chat_repo with user_msg
+      // The Gradio endpoint returns [chat_state, textbox_value]; we want chat_state
+      const res = await client.predict("/chat_repo", { user_msg: txt });
+      const data = res.data || [];
+      // data[0] is chat state (array of messages with role/content)
+      if (Array.isArray(data[0])) {
+        lastChatState = data[0];
+        // render messages from lastChatState (it uses dicts {role, content})
+        chatWindow.innerHTML = '';
+        for (const m of lastChatState) {
+          // role may be 'user'/'assistant' or openai style; normalize
+          const role = (m.role === 'user' || m.role === 'assistant') ? (m.role === 'user' ? 'user' : 'bot') : (m.type === 'user' ? 'user' : 'bot');
+          appendBubble(role === 'user' ? 'user' : 'bot', m.content || m.message || m.text || '');
+        }
+        // Put focus back to input
+        userInput.focus();
+        showStatus('Answered', true);
+      } else {
+        // fallback: raw text
+        appendBubble('bot', String(data));
+        showStatus('Answered', true);
+      }
+    } catch (err) {
+      console.error(err);
+      showStatus('Chat failed: ' + (err.message||err), false);
+      appendBubble('bot', 'Error contacting model. Check console.');
+    } finally {
+      hideTypingIndicator();
+      sendBtn.disabled = false;
+    }
+  }
+
+  sendBtn.addEventListener('click', sendMessage);
+  userInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  clearChatBtn.addEventListener('click', () => {
+    chatWindow.innerHTML = '';
+    lastChatState = [];
+  });
+
+  // small UX: prefill example repo
+  repoUrlInput.value = "https://github.com/Pranesh-2005/3dPortfolio";
+</script>
+</body>
+</html>
